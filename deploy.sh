@@ -15,6 +15,8 @@ cd "$DST"
 if [ -n "$(git status --porcelain)" ]; then
   git add -A
   git commit -m "Update demo ($(date '+%Y-%m-%d %H:%M'))"
+  # absorb commits GitHub makes on the remote (e.g. the CNAME file)
+  git pull --rebase --quiet
   git push
   echo "Published. Live in about a minute at https://demo.neuralcontinuitylab.com"
 else
