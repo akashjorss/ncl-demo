@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NCL · Physical Observability</title>
+  <script>if (location.search.indexOf("embed") > -1) document.documentElement.classList.add("embed");</script>
+  <script>document.write('<link rel="stylesheet" href="styles.css?cb=' + Date.now() + '">');</script>
+  <noscript><link rel="stylesheet" href="styles.css"></noscript>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-group">
+      <span class="logo">NCL</span>
+      <div class="brand-text">
+        <strong>Physical Observability</strong>
+        <span>Neural Continuity Labs</span>
+      </div>
+    </div>
+    <div class="asset-strip">
+      <span class="live-dot" id="liveDot"></span>
+      <span id="assetName">Coolant Loop C-17</span>
+      <span class="divider"></span>
+      <span class="clock" id="clock">09:00</span>
+    </div>
+  </header>
+
+  <main class="stage">
+    <!-- LEFT: the field -->
+    <section class="field-col">
+      <div class="controls">
+        <div class="seg" role="tablist" aria-label="Reconstruction mode">
+          <button class="seg-btn" data-view="before" type="button">Before NCL</button>
+          <button class="seg-btn is-active" data-view="after" type="button">After NCL</button>
+        </div>
+        <div class="toggles">
+          <button class="pill is-active" data-overlay="sensors" type="button">Sensors</button>
+          <button class="pill" data-overlay="confidence" type="button">Confidence</button>
+        </div>
+      </div>
+
+      <p class="explainer" id="explainer">
+        NCL reconstructs the full temperature field from the existing sparse sensors.
+      </p>
+
+      <div class="field-wrap" id="fieldWrap">
+        <canvas id="fieldCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+        <div class="probe-tip" id="probeTip" hidden></div>
+        <div class="anomaly-callout" id="anomalyCallout" hidden></div>
+        <div class="field-hint" id="fieldHint">Hover to read · click to plant a virtual sensor</div>
+      </div>
+
+      <div class="colorbar">
+        <span id="cbMin">35°C</span>
+        <div class="cb-track" id="cbTrack"></div>
+        <span id="cbMax">84°C</span>
+      </div>
+
+      <div class="timeline">
+        <button class="play-btn" id="playBtn" type="button" aria-label="Play">▶</button>
+        <div class="track-wrap">
+          <input id="timeline" type="range" min="0" max="47" step="1" value="0">
+          <div class="ticks" id="ticks"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: operator output -->
+    <aside class="ops">
+      <div class="status-card" id="statusCard">
+        <span class="eyebrow">Asset status</span>
+        <div class="status-row">
+          <h2 id="statusWord">Normal</h2>
+          <span class="status-pill" id="statusPill">All nominal</span>
+        </div>
+        <p id="statusLine">Existing sensors and the reconstructed field agree. Operating normally.</p>
+      </div>
+
+      <div class="gap-card" id="gapCard">
+        <span class="eyebrow">What the sensors miss</span>
+        <div class="gap-row">
+          <div class="gap-val">
+            <small>Hottest sensor</small>
+            <strong id="sensorPeak">35.2°C</strong>
+          </div>
+          <div class="gap-arrow">→</div>
+          <div class="gap-val accent">
+            <small>NCL reconstructed peak</small>
+            <strong id="reconPeak">35.0°C</strong>
+          </div>
+        </div>
+        <div class="gap-bar"><span id="gapHidden">Hidden rise: +0.0°C</span></div>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric">
+          <small>Fault location</small>
+          <strong id="mLocation">None</strong>
+        </div>
+        <div class="metric">
+          <small>Confidence here</small>
+          <strong id="mConfidence">High</strong>
+        </div>
+        <div class="metric">
+          <small>Nearest sensor</small>
+          <strong id="mDistance">in range</strong>
+        </div>
+        <div class="metric">
+          <small>Time</small>
+          <strong id="mTime">09:00</strong>
+        </div>
+      </div>
+
+      <div class="action-card" id="actionCard">
+        <span class="eyebrow">Recommended action</span>
+        <p id="actionText">Continue normal monitoring. No intervention required.</p>
+      </div>
+
+      <div class="probe-card">
+        <span class="eyebrow">Virtual sensor</span>
+        <p id="probeReadout">Hover anywhere on the field to read the reconstructed temperature, including regions with no physical sensor.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="footnote">
+    Best-estimate field reconstruction with a confidence map. Demo driven by a physics simulation (advection-diffusion); the reconstruction stands in for the NCL model output.
+  </footer>
+
+  <!-- Load data + app cache-busted, so a fresh generate_field_data.py run or code edit always shows.
+       document.write keeps them synchronous and ordered (data before app). -->
+  <script>
+    var _cb = Date.now();
+    document.write('<scr' + 'ipt src="demo_data.js?cb=' + _cb + '"></scr' + 'ipt>');
+    document.write('<scr' + 'ipt src="app.js?cb=' + _cb + '"></scr' + 'ipt>');
+  </script>
+</body>
+</html>

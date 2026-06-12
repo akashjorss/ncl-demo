@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NCL · Physical Observability (3D)</title>
+  <script>if (location.search.indexOf("embed") > -1) document.documentElement.classList.add("embed");</script>
+  <script>document.write('<link rel="stylesheet" href="styles.css?cb=' + Date.now() + '">');</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-group">
+      <span class="logo">NCL</span>
+      <div class="brand-text">
+        <strong>Physical Observability · 3D</strong>
+        <span>Neural Continuity Labs</span>
+      </div>
+    </div>
+    <div class="asset-strip">
+      <span class="live-dot" id="liveDot"></span>
+      <span id="assetName">Coolant Loop C-17</span>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="hud hud-controls">
+      <div class="seg">
+        <button class="seg-btn" data-view="before" type="button">Before NCL</button>
+        <button class="seg-btn is-active" data-view="after" type="button">After NCL</button>
+      </div>
+      <div class="toggles">
+        <button class="pill is-active" data-toggle="sensors" type="button">Sensors</button>
+        <button class="pill is-active" data-toggle="glow" type="button">Volume</button>
+        <button class="pill" data-toggle="confidence" type="button">Confidence</button>
+      </div>
+      <div class="toggles">
+        <button class="pill" id="lookInBtn" type="button">Look inside</button>
+        <button class="pill" id="resetBtn" type="button">Reset view</button>
+      </div>
+      <button class="pill wide" id="clearBtn" type="button">Clear virtual sensors</button>
+      <div class="cb3d">
+        <span id="cb3dMin">35°C</span>
+        <div class="cb3d-track" id="cb3dTrack"></div>
+        <span id="cb3dMax">109°C</span>
+      </div>
+      <p class="hud-hint">Drag to rotate · scroll to zoom in (even inside the pipe) · <strong>click to plant a virtual sensor</strong> · hover to read</p>
+    </div>
+
+    <aside class="hud hud-panel">
+      <div class="status-card" id="statusCard">
+        <span class="eyebrow">Asset status</span>
+        <div class="status-row"><h2 id="statusWord">Normal</h2><span class="status-pill" id="statusPill">No alarm</span></div>
+        <p id="statusLine">Sensors and the reconstructed field agree.</p>
+      </div>
+      <div class="gap-card" id="gapCard">
+        <span class="eyebrow">What the sensors miss</span>
+        <div class="gap-row">
+          <div class="gap-val"><small>Hottest pipe sensor</small><strong id="sensorPeak">35°C</strong></div>
+          <div class="gap-arrow">→</div>
+          <div class="gap-val accent"><small>NCL reconstructed peak</small><strong id="reconPeak">35°C</strong></div>
+        </div>
+        <div class="gap-bar"><span id="gapHidden">Hidden in the pipe: +0°C</span></div>
+      </div>
+      <div class="metric-grid">
+        <div class="metric"><small>Fault location</small><strong id="mLocation">None</strong></div>
+        <div class="metric"><small>Confidence here</small><strong id="mConfidence">High</strong></div>
+        <div class="metric"><small>Nearest sensor</small><strong id="mDistance">in range</strong></div>
+        <div class="metric"><small>Time</small><strong id="mTime">09:00</strong></div>
+      </div>
+      <div class="action-card" id="actionCard">
+        <span class="eyebrow">Recommended action</span>
+        <p id="actionText">Continue normal monitoring.</p>
+      </div>
+      <div class="legend-card">
+        <div class="legend-row"><i class="dot cool"></i> Pipe sensor (existing)</div>
+        <div class="legend-row"><i class="dot glow"></i> Reconstructed hot section</div>
+        <div class="legend-row"><i class="dot plant"></i> Virtual sensor (click to place)</div>
+      </div>
+    </aside>
+
+    <div class="probe-tip" id="probeTip" hidden></div>
+
+    <div class="hud hud-explainer" id="explainer">
+      <strong>After NCL:</strong> the field is reconstructed through the whole loop; the hot core glows. Plant a virtual sensor anywhere, or look inside the pipe.
+    </div>
+
+    <div class="hud hud-timeline">
+      <button class="play" id="playBtn" type="button" aria-label="Play">▶</button>
+      <span class="clock" id="clock">09:00</span>
+      <div class="track">
+        <input id="timeline" type="range" min="0" max="39" step="1" value="0">
+        <div class="ticks" id="ticks"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/OrbitControls.js"></script>
+  <script src="vendor/CopyShader.js"></script>
+  <script src="vendor/LuminosityHighPassShader.js"></script>
+  <script src="vendor/EffectComposer.js"></script>
+  <script src="vendor/RenderPass.js"></script>
+  <script src="vendor/ShaderPass.js"></script>
+  <script src="vendor/MaskPass.js"></script>
+  <script src="vendor/UnrealBloomPass.js"></script>
+  <script>
+    var _cb = Date.now();
+    document.write('<scr' + 'ipt src="demo3d_data.js?cb=' + _cb + '"></scr' + 'ipt>');
+    document.write('<scr' + 'ipt src="app3d.js?cb=' + _cb + '"></scr' + 'ipt>');
+  </script>
+</body>
+</html>

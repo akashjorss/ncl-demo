@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NCL · Physical Observability</title>
+  <script>document.write('<link rel="stylesheet" href="styles.css?cb=' + Date.now() + '">');</script>
+</head>
+<body>
+  <header class="cb-topbar">
+    <div class="brand-group">
+      <span class="logo">NCL</span>
+      <div class="brand-text">
+        <strong>Physical Observability</strong>
+        <span>Neural Continuity Labs</span>
+      </div>
+    </div>
+
+    <div class="view-seg" role="tablist" aria-label="View">
+      <button class="view-btn is-active" data-view="2d" type="button" role="tab">2D field</button>
+      <button class="view-btn" data-view="3d" type="button" role="tab">3D loop</button>
+    </div>
+
+    <div class="asset-strip">
+      <span class="live-dot" id="liveDot"></span>
+      <span>Coolant Loop C-17</span>
+    </div>
+  </header>
+
+  <main class="cb-stage" id="cbStage">
+    <div class="view-frame is-active" data-frame="2d">
+      <iframe id="frame2d" title="NCL 2D field demo" allow="fullscreen"></iframe>
+    </div>
+    <div class="view-frame" data-frame="3d">
+      <iframe id="frame3d" title="NCL 3D loop demo" allow="fullscreen"></iframe>
+    </div>
+  </main>
+
+  <footer class="cb-foot">
+    Demo driven by a physics simulation (advection-diffusion); the reconstruction stands in for the NCL model output. Same asset, two views: a 2D field slice and the full 3D coolant loop.
+  </footer>
+
+  <script>
+    (function () {
+      var cb = Date.now();
+      var f2d = document.getElementById("frame2d");
+      var f3d = document.getElementById("frame3d");
+      // Preload both demos in embed mode (their own top bars are hidden by ?embed=1).
+      f2d.src = "ncl_demo/index.html?embed=1&cb=" + cb;
+      f3d.src = "ncl_demo_3d/index.html?embed=1&cb=" + cb;
+
+      var frames = { "2d": f2d, "3d": f3d };
+      var btns = Array.prototype.slice.call(document.querySelectorAll(".view-btn"));
+      var panes = Array.prototype.slice.call(document.querySelectorAll(".view-frame"));
+
+      function show(view) {
+        btns.forEach(function (b) { b.classList.toggle("is-active", b.dataset.view === view); });
+        panes.forEach(function (p) { p.classList.toggle("is-active", p.dataset.frame === view); });
+        // Nudge the now-visible demo to re-measure its container (3D re-fits the camera).
+        var win = frames[view] && frames[view].contentWindow;
+        if (win) {
+          try { win.dispatchEvent(new Event("resize")); } catch (e) {}
+          setTimeout(function () { try { win.dispatchEvent(new Event("resize")); } catch (e) {} }, 60);
+        }
+      }
+
+      btns.forEach(function (b) {
+        b.addEventListener("click", function () { show(b.dataset.view); });
+      });
+
+      // Keyboard: 2 / 3 to switch views quickly during a pitch.
+      window.addEventListener("keydown", function (e) {
+        if (e.key === "2") show("2d");
+        else if (e.key === "3") show("3d");
+      });
+    })();
+  </script>
+</body>
+</html>
