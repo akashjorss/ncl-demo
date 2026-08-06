@@ -9,7 +9,10 @@ DST="$(cd "$(dirname "$0")" && pwd)"
 # -L dereferences symlinks, --delete removes files you deleted in the source
 rsync -aL --delete --exclude .DS_Store "$SRC/ncl_demo/"    "$DST/ncl_demo/"
 rsync -aL --delete --exclude .DS_Store "$SRC/ncl_demo_3d/" "$DST/ncl_demo_3d/"
-cp "$SRC/ncl_demo_combined/index.html" "$SRC/ncl_demo_combined/styles.css" "$SRC/ncl_demo_combined/gate.js" "$DST/"
+cp "$SRC/ncl_demo_combined/index.html" "$SRC/ncl_demo_combined/styles.css" \
+   "$SRC/ncl_demo_combined/tokens.css" \
+   "$SRC/ncl_demo_combined/gate.js" "$SRC/ncl_demo_combined/agent.js" \
+   "$SRC/ncl_demo_combined/config.js" "$DST/"
 
 cd "$DST"
 if [ -n "$(git status --porcelain)" ]; then
