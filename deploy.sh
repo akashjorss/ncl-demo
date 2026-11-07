@@ -3,7 +3,7 @@
 # GitHub Pages rebuilds on push; changes are live ~1 minute later.
 set -euo pipefail
 
-SRC="/Users/akashmalhotra/Projects/Neural Continuity Labs"
+SRC="/Users/akashmalhotra/NCL/demos"
 DST="$(cd "$(dirname "$0")" && pwd)"
 
 # -L dereferences symlinks, --delete removes files you deleted in the source
