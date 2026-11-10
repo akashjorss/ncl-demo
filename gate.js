@@ -5,7 +5,9 @@
    server-side security. */
 (function () {
   "use strict";
-  if (sessionStorage.getItem("nclAccess") === "granted") return;
+  // The password also opens the hosted agent backend, so it stays in this tab's session storage as its
+  // token. A tab unlocked before that existed is asked once more.
+  if (sessionStorage.getItem("nclAccess") === "granted" && sessionStorage.getItem("nclToken")) return;
 
   var HASH = "7e5d372861a1707177f26240d98713b826c1ecf8029d28c1bcd07698da76c85f";
 
@@ -100,6 +102,7 @@
       e.preventDefault();
       if (sha256(input.value) === HASH) {
         sessionStorage.setItem("nclAccess", "granted");
+        sessionStorage.setItem("nclToken", input.value);
         wrap.remove();
         reveal();
       } else {

@@ -719,7 +719,10 @@
       "RULES: state a temperature, flow, confidence, or location only if a tool returned it in THIS conversation or it is visible on the console screen. Virtual sensors persist; remove them only when asked. act only logs a recommendation: never claim you physically changed anything, and call it a recommendation you logged. Never present the asset as a live plant; if the operator asks where the data comes from, say it plainly. End with a substantive wrap-up (the finding, the evidence, the recommendation) in clean prose: no markdown, no bullets or headings, and no em dashes or en dashes.";
   }
   async function callBackend(body, signal) {
-    var res = await fetch(BACKEND, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: signal });
+    var headers = { "Content-Type": "application/json" }, token = null;
+    try { token = sessionStorage.getItem("nclToken"); } catch (e) {}   // set by the site's gate; the hosted backend checks it
+    if (token) headers.Authorization = "Bearer " + token;
+    var res = await fetch(BACKEND, { method: "POST", headers: headers, body: JSON.stringify(body), signal: signal });
     if (!res.ok) { var t = ""; try { t = (await res.text()).slice(0, 200); } catch (e) {} throw new Error("backend HTTP " + res.status + " " + t); }
     return res.json();
   }
