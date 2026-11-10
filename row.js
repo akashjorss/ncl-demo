@@ -234,6 +234,7 @@
 
   // ---- HTML labels -------------------------------------------------------------------------
   const labels = [];
+  const probes = [];   // virtual sensors pinned by a click or by the agent: { key, mark, halo, L, born }
   function addLabel(text, pos, cls, prio) {
     const el = document.createElement("div"); el.className = "lbl " + (cls || ""); el.innerHTML = text;
     stage.appendChild(el);
@@ -436,6 +437,7 @@
     const leadEl = opt("leadLine"); leadEl.textContent = lead; leadEl.hidden = !lead;
     renderTelemetry(fr);
     measureBlockers();
+    refreshProbes();
   }
   function renderTelemetry(fr) {
     const c = fr.cdu, rows = [];
@@ -477,6 +479,20 @@
     $("hudHint").style.opacity = "0.5";
   });
   renderer.domElement.addEventListener("pointerleave", () => { pointerPx = null; $("probeTip").hidden = true; });
+  // A click (not a drag) on a rack, a hose or the CDU pins a probe there; a second click removes it.
+  let downAt = null;
+  renderer.domElement.addEventListener("pointerdown", e => { downAt = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+  renderer.domElement.addEventListener("pointerup", e => {
+    const d = downAt; downAt = null;
+    if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5 || performance.now() - d.t > 600) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1; pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(hoverTargets, false)[0]; if (!hit) return;
+    const u = hit.object.userData, key = u.kind === "cdu" ? "cdu" : "rack" + (u.kind === "rack" ? u.index : u.rack);
+    const p = probes.find(o => o.key === key);
+    if (p) removeProbe(p); else dropProbe(key);
+  });
   function updateHover() {
     const tip = $("probeTip");
     if (!pointerPx) { tip.hidden = true; return; }
@@ -590,6 +606,7 @@
     requestAnimationFrame(animate);
     easeFocus(); controls.update();
     if (ring.visible) { const s = 1 + 0.18 * Math.sin((t || 0) / 220); ring.scale.set(s, s, s); ring2.scale.set(s, s, s); ring.material.opacity = 0.55 + 0.4 * (0.5 + 0.5 * Math.sin((t || 0) / 220)); }
+    animateProbes(t || 0);
     renderer.render(scene, camera);
     placeLabels(); updateHover();
   }
@@ -626,7 +643,7 @@
   const erf = x => { const t = 1 / (1 + 0.3275911 * Math.abs(x)), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; };
   const pRestricted = b => b.kSd > 0 ? 0.5 * (1 + erf((0.85 - b.k) / (b.kSd * Math.SQRT2))) : (b.k < 0.85 ? 1 : 0);
   const locatedRack = fr => fr.status !== "normal" ? fr.hidden.rack : -1;
-  const SRC = MODEL ? "estimated by the trained ensemble" : "simulation state, a stand-in for the NCL model";
+  const SRC = MODEL ? "estimated by the NCL model" : "simulation state, a stand-in for the NCL model";
   function branchReading(i, fr) {
     const b = fr.branches[i], rk = RACKS[i], q = Math.round(b.q * 60), t = Math.round(b.tRet), cf = confPct(b, fr);
     return { key: "rack" + i, label: rk.id + " branch", found: true, onPipe: true, snapCells: 0, tempC: t, tempSdC: +b.tRetSd.toFixed(1),
@@ -640,11 +657,62 @@
     return { key: "cdu", label: "CDU-A1", found: true, onPipe: true, snapCells: 0, tempC: t, supplyC: Math.round(c.SEC_SupplyTemperatureCelsius), flowLpm: q, confidencePct: 97,
       source: "measured by the CDU's own sensors", summary: "return " + t + "°C · " + q.toLocaleString("en-US") + " L/min, measured" };
   }
+  // ---- probes: a virtual sensor pinned to a rack branch or to the CDU. Its reading follows the timeline. ----
+  const PROBE_MAX = 6, PROBE_HEX = 0x7dd3fc;
+  const probeGeo = new THREE.SphereGeometry(0.075, 16, 12), haloGeo = new THREE.TorusGeometry(0.17, 0.012, 8, 36);
+  const probeMat = new THREE.MeshBasicMaterial({ color: PROBE_HEX });
+  const rackOf = key => parseInt(String(key).replace("rack", ""), 10);
+  const probeAnchor = key => key === "cdu" ? new THREE.Vector3(cduX, CDU.h * 0.62, CDU.d * 0.5) : branchAnchor(rackOf(key));
+  function probeText(key, fr) {
+    if (key === "cdu") { const c = fr.cdu; return "<b>CDU-A1</b> " + Math.round(c.SEC_FlowLitersPerMinute).toLocaleString("en-US") + " L/min · return " + c.SEC_ReturnTemperatureCelsius.toFixed(0) + "°C<small>measured</small>"; }
+    const i = rackOf(key), b = fr.branches[i];
+    if (state.view !== "after") return "<b>" + RACKS[i].id + "</b><small>no sensor on this branch</small>";
+    return "<b>" + RACKS[i].id + "</b> " + (b.q * 60).toFixed(0) + " L/min · return " + b.tRet.toFixed(0) + "°C";
+  }
+  function dropProbe(key) {
+    key = String(key);
+    if (key !== "cdu" && !RACKS[rackOf(key)]) return null;
+    let p = probes.find(o => o.key === key);
+    if (!p) {
+      const a = probeAnchor(key), mark = new THREE.Mesh(probeGeo, probeMat);
+      const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: PROBE_HEX, transparent: true, opacity: 0.9, depthTest: false }));
+      mark.position.copy(a); halo.position.copy(a); groups.marks.add(mark); groups.marks.add(halo);
+      p = { key: key, mark: mark, halo: halo, L: addLabel("", [a.x, a.y + 0.2, a.z], "probe", 96) };
+      probes.push(p);
+      if (probes.length > PROBE_MAX) removeProbe(probes[0]);
+    }
+    p.born = performance.now();
+    refreshProbes();
+    return p;
+  }
+  function removeProbe(p) {
+    const i = probes.indexOf(p); if (i < 0) return;
+    probes.splice(i, 1); groups.marks.remove(p.mark); groups.marks.remove(p.halo); p.halo.material.dispose();
+    p.L.el.remove(); labels.splice(labels.indexOf(p.L), 1);
+    refreshProbes();
+  }
+  function clearProbes() { probes.slice().forEach(removeProbe); }
+  function refreshProbes() {
+    const fr = FR[state.frame];
+    probes.forEach(p => setLabel(p.L, probeText(p.key, fr), "probe"));
+    const btn = document.getElementById("clearProbes"); if (btn) btn.hidden = !probes.length;
+  }
+  function animateProbes(t) {                    // a new probe sends out one ring, then keeps a slow pulse
+    if (!probes.length) return;
+    const now = performance.now();
+    probes.forEach(p => {
+      const age = (now - p.born) / 900, k = age < 1 ? 0.5 + 2.4 * age : 1 + 0.12 * Math.sin(t / 260);
+      p.halo.quaternion.copy(camera.quaternion); p.halo.scale.set(k, k, k);
+      p.halo.material.opacity = age < 1 ? 0.95 - 0.5 * age : 0.5;
+    });
+  }
+  (function () { const b = document.getElementById("clearProbes"); if (b) b.addEventListener("click", clearProbes); })();
+
   window.NCL_AGENT_API = {
     view: "ROW",
     agentBrief: "The asset is a liquid-cooled rack row built to the Open Compute Project Deschutes specification: 16 IT racks in two hot-aisle bays (R-01 to R-08 on the north side, R-09 to R-16 on the south side) fed by one 2 MW coolant distribution unit, CDU-A1, at the row end. The CDU measures its supply and return temperature, pressures, total flow, pump and valve state. Each rack reports its IT power and its hottest component temperature. No sensor measures the coolant flow or the return temperature of a single rack branch. " +
-      (MODEL ? "A trained neural network ensemble estimates those per-branch values from the measured channels, with a confidence from its spread. " : "On this page a network simulation stands in for the NCL model. ") +
-      "A restricted branch starves its rack until the servers throttle at " + M.throttleC + " C. In this view a temperature is a coolant return temperature, probe_point snaps to a rack branch or to the CDU and also returns the branch flow in L/min, and the hottest physical sensor in get_overview is the CDU return sensor, which mixes all 16 branches. Two different figures: confidencePct is the precision of a reading (100 means a sensor pins it, lower means a wider spread around the estimate), and restrictionProbabilityPct is the model's probability that the branch is restricted. A branch can be restricted with near certainty while its exact flow still carries a spread.",
+      (MODEL ? "The NCL model, a trained neural network ensemble, estimates those per-branch values from the measured channels, with a confidence from its spread. Call it the NCL model. " : "On this page a network simulation stands in for the NCL model. ") +
+      "A restricted branch starves its rack until the servers throttle at " + M.throttleC + " C. In this view a temperature is a coolant return temperature, probe_point snaps to a rack branch or to the CDU and also returns the branch flow in L/min, and the hottest physical sensor in get_overview is the CDU return sensor, which mixes all 16 branches. Two different figures: confidencePct is the precision of a reading (100 means a sensor pins it, lower means a wider spread around the estimate), and restrictionProbabilityPct is the model's probability that the branch is restricted. A branch can be restricted with near certainty while its exact flow still carries a spread. A probe leaves a pinned reading on the scene that follows the timeline, and a click on a rack, a hose or the CDU pins one too. Provenance, for when the operator asks about it: the incident and its telemetry on this page are simulated, and the model was trained on simulated incidents; answer that plainly when asked, and do not add it to other answers.",
     viewpoints: ["overview", "fault", "cdu", "top", "front", "side", "iso"],
     layers: ["confidence", "structure", "rdhx", "labels"],
     actions: ["inspect", "open_bypass", "migrate_workload"],
@@ -666,7 +734,7 @@
         if (MODEL) { out.worstBranchDeficitSdPct = Math.round(h.deficitSdPct); out.restrictionProbabilityPct = Math.round(100 * h.pRestricted); }
         if (leadMin != null && state.frame >= M.watchFrame) { out.flaggedAt = FR[M.watchFrame].t; if (state.frame >= throttleFrame) out.leadBeforeServerAlarmMin = leadMin; }
       }
-      out.note = "hottestSensorC is the CDU secondary return sensor, the mix of all 16 branches. peakC is the hottest branch return and hiddenRiseC their difference. Branch values: " + SRC + ". The incident is simulated.";
+      out.note = "hottestSensorC is the CDU secondary return sensor, the mix of all 16 branches. peakC is the hottest branch return and hiddenRiseC their difference. Branch values: " + SRC + ".";
       return out;
     },
     listSensors() {
@@ -715,8 +783,9 @@
     },
     probe(key) {
       const fr = FR[state.frame];
-      if (key === "cdu") return cduReading(fr);
-      const i = parseInt(String(key).replace("rack", ""), 10); if (isNaN(i) || !fr.branches[i]) return null;
+      if (key === "cdu") { dropProbe("cdu"); return cduReading(fr); }
+      const i = rackOf(key); if (isNaN(i) || !fr.branches[i]) return null;
+      dropProbe("rack" + i);
       return branchReading(i, fr);
     },
     probeAt(nx, ny, nz) {
@@ -726,10 +795,11 @@
       const dc = new THREE.Vector3(cduX, 1.4, 0).distanceTo(p);
       if (Math.min(bd, dc) > 2.6) return { onPipe: false, found: false, nx: nx, ny: ny, nz: nz, label: "off the network (empty space)" };
       const cduWins = dc < bd, d = cduWins ? dc : bd, r = cduWins ? cduReading(fr) : branchReading(best, fr), a = cduWins ? new THREE.Vector3(cduX, 1.4, 0) : branchAnchor(best);
+      dropProbe(cduWins ? "cdu" : "rack" + best);
       return Object.assign(r, toN(a.x, a.y, a.z), { snapCells: Math.max(0, Math.round((d - 0.3) / 0.1)) });
     },
-    focusOn(key) { if (key === "cdu") $("viewCdu").click(); else { const i = parseInt(String(key).replace("rack", ""), 10); if (RACKS[i]) lookAt(new THREE.Vector3(RACKS[i].x, 2.2, RACKS[i].zFront), new THREE.Vector3(1.4, 1.0, RACKS[i].sgn * 2.4)); } },
-    resetView: resetView, clearProbes() {},
+    focusOn(key) { if (key === "cdu") $("viewCdu").click(); else { const i = parseInt(String(key).replace("rack", ""), 10); if (RACKS[i]) lookAt(new THREE.Vector3(RACKS[i].x, 2.3, RACKS[i].zFront * 0.6), new THREE.Vector3(2.0, 2.3, RACKS[i].sgn * 3.4)); } },
+    resetView: resetView, clearProbes: clearProbes,
     // ---- view control (the agent's hands on the console) ----
     setViewpoint(preset) {
       preset = String(preset || "overview").toLowerCase();
@@ -753,14 +823,59 @@
       return { zoom: dir };
     },
     setLayer(layer, on) { const p = document.querySelector('.pill[data-layer="' + layer + '"]'); if (p && !p.classList.contains("disabled") && p.classList.contains("is-active") !== !!on) p.click(); return { layer: layer, on: !!state.layers[layer] }; },
-    seekTime(to) { to = (to || "incident").toLowerCase(); if (/start|begin/.test(to)) setFrame(0); else if (/end|now|latest|present/.test(to)) setFrame(NF - 1); else this.seekCritical(); const fr = FR[state.frame]; return { time: fr.t, status: fr.status }; },
+    seekTime(to) { to = (to || "incident").toLowerCase(); if (/start|begin/.test(to)) setFrame(0); else if (/end|now|latest|present/.test(to)) setFrame(NF - 1); else if (!(M.criticalFrame != null && state.frame >= M.criticalFrame)) this.seekCritical(); const fr = FR[state.frame]; return { time: fr.t, status: fr.status }; },
     playTimeline() { play(); return { playing: true }; },
+    // The built-in investigator's plan for this asset: the tour an operator would make, on the real controls.
+    // Each step says what it does, acts, and returns the line that replaces it, with the reading it took.
+    scriptedPlan(intent) {
+      const api = this, f0 = state.frame, fr0 = FR[f0], loc = locatedRack(fr0), conf0 = !!state.layers.confidence, steps = [];
+      const read = key => { api.focusOn(key); return api.probe(key); };
+      const short = r => r.flowLpm + " L/min · return " + r.tempC + "°C";
+      steps.push({ say: "Checking the CDU, the one place where flow is measured…", wait: 1500, act() {
+        const r = read("cdu"), d = FR[state.frame].hidden.cduFlowDropPct;
+        return { reading: r, done: "CDU-A1: " + r.summary + (d >= 0.5 ? " · total flow down " + d.toFixed(1) + "%" : "") };
+      } });
+      if (loc < 0) {                                         // a calm moment: read one branch on each side of each bay
+        [1, 12, 6, 15].forEach((i, n) => steps.push({ say: (n < 2 ? "Walking bay 1: " : "Walking bay 2: ") + RACKS[i].id + "…", wait: 1100, act() {
+          const r = read("rack" + i); return { reading: r, done: RACKS[i].id + " branch: " + short(r) + " · " + r.confidencePct + "% confidence" };
+        } }));
+        return { steps: steps, cleanup() {} };
+      }
+      const rk = RACKS[loc], near = loc + (loc % 8 === 7 ? -1 : 1), across = (loc + 8) % N;
+      steps.push({ say: "Turning on the confidence layer…", wait: 1300, act() {
+        api.setViewpoint("overview"); api.setLayer("confidence", true);
+        const fr = FR[state.frame], tight = fr.branches.filter(b => confPct(b, fr) >= 85).length;
+        return { done: "Confidence layer: the estimate is tight on " + tight + " of " + N + " branches" };
+      } });
+      steps.push({ say: "Reading a healthy neighbour, " + RACKS[near].id + "…", wait: 1300, act() {
+        const r = read("rack" + near); return { reading: r, done: RACKS[near].id + " branch: " + short(r) };
+      } });
+      steps.push({ say: "Crossing the aisle to " + RACKS[across].id + "…", wait: 1400, act() {
+        const r = read("rack" + across); return { reading: r, done: RACKS[across].id + " branch: " + short(r) };
+      } });
+      steps.push({ say: "Inspecting the " + rk.id + " branch…", wait: 1700, act() {
+        api.setViewpoint("fault"); const r = api.probe("rack" + loc), h = FR[state.frame].hidden;
+        const exp = Math.round(h.expectedFlowLpm != null ? h.expectedFlowLpm : h.nominalFlowLpm);
+        return { reading: r, done: "<b>" + rk.id + " branch: " + r.flowLpm + " of " + exp + " L/min · return " + r.tempC + "°C</b>" + (r.throttling ? " · servers throttling" : "") };
+      } });
+      if (MODEL && M.watchFrame != null && f0 > M.watchFrame) {
+        steps.push({ say: "Rewinding to the model's first flag…", wait: 1900, act() {
+          pause(); setFrame(M.watchFrame); const h = FR[M.watchFrame].hidden;
+          return { done: FR[M.watchFrame].t + ": first flag, deficit " + Math.round(h.deficitPct) + " ± " + Math.round(h.deficitSdPct) + "%" + (throttleFrame != null && M.watchFrame < throttleFrame ? ", no server alarm yet" : "") };
+        } });
+        steps.push({ say: "Back to " + fr0.t + "…", wait: 1100, act() {
+          setFrame(f0); const h = fr0.hidden;
+          return { done: fr0.t + ": deficit " + Math.round(h.deficitPct) + " ± " + Math.round(h.deficitSdPct) + "%" };
+        } });
+      }
+      return { steps: steps, cleanup() { if (state.frame !== f0) setFrame(f0); if (!conf0) api.setLayer("confidence", false); } };
+    },
     // the offline scripted investigator's wording for this asset (the loop views use the shared one)
     narrate(intent, ov, obs) {
       const hot = obs.find(o => ov.worstBranch && o.label === ov.worstBranch + " branch"), cdu = obs.find(o => o.key === "cdu");
       const calm = obs.filter(o => o !== hot && o.key !== "cdu"), by = MODEL ? "by the model's estimate" : "in the simulation";
       const flows = calm.map(o => o.flowLpm), lo = Math.min.apply(null, flows), hi = Math.max.apply(null, flows);
-      const names = calm.map(o => o.label.replace(" branch", "")).join(" and ");
+      const ids = calm.map(o => o.label.replace(" branch", "")), names = ids.length > 2 ? ids.slice(0, -1).join(", ") + " and " + ids[ids.length - 1] : ids.join(" and ");
       if (ov.faultPresent && hot) {
         let s = "";
         if (calm.length) s += "I checked the CDU and " + (calm.length === 1 ? "one healthy branch" : calm.length + " healthy branches") + " first. " + names + " draw" + (calm.length === 1 ? "s " : " ") + (lo === hi ? lo : lo + " to " + hi) + " L/min, normal. ";

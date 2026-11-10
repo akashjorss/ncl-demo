@@ -282,7 +282,7 @@
           ny: { type: "number", description: "0..1 along the second axis (see describe_asset)" },
           nz: { type: "number", description: "0..1 along the third axis (3D views only)" } } }),
       fn("clear_sensors", "Remove every virtual sensor the agent has placed (reset the view). Call this when the user asks to clear, remove, or reset sensors. Do not investigate or re-add sensors afterwards."),
-      fn("act", "Simulate a control action on the asset. Logged and shown but nothing physical happens. Use ONLY for a genuine control decision, never to add or clear sensors. At most once, with a grounded target.",
+      fn("act", "Log a recommended control action for the operator. It is shown on the console as advice; no actuator is connected, so nothing physical happens and the operator decides. Use ONLY for a genuine control decision, never to add or clear sensors. At most once, with a grounded target.",
         { type: "object", additionalProperties: false, required: ["type", "rationale"], properties: {
           type: { type: "string", enum: actions },
           target: { type: "string", description: "the location/section the action applies to" },
@@ -341,12 +341,12 @@
 
   function runSimulatedActuator(action, ctx) {
     var label = (action.type || "action") + (action.target ? (" · " + action.target) : "");
-    ctx.ui.addNote("⚙ Action: " + esc(label) + " (simulated, no actuator connected)");
+    ctx.ui.addNote("⚙ Recommended action: " + esc(label) + " (advice for the operator, no actuator connected)");
     if (action.rationale) ctx.ui.addNote("   ↳ " + esc(action.rationale));
     logPush({ t: "action", action: action, simulated: true });
     // REAL ACTUATOR INTEGRATION PLUGS IN HERE: a production build would POST to the control
     // system through the backend, behind whatever guard the deployment requires.
-    return { executed: true, simulated: true, note: "no real actuator connected" };
+    return { logged: true, advisory: true, note: "logged as a recommendation for the operator; no actuator is connected" };
   }
 
   // ---- deterministic grounding verifier -----------------------------------
@@ -668,6 +668,22 @@
       if (ov.faultPresent && fault) targets.push(fault);
       if (!targets.length && locs[0]) targets.push(locs[0]);
       var canFocus = typeof api.focusOn === "function", obs = [];
+      var plan = typeof api.scriptedPlan === "function" ? api.scriptedPlan(intent, ov) : null;   // a view may bring its own tour of its own controls
+      if (plan) {
+        targets = [];
+        try {
+          for (var k = 0; k < plan.steps.length; k++) {
+            if (ctx.signal.aborted) throw new Error("aborted");
+            var st = plan.steps[k], el = ui.addAction(st.say);
+            await delay(380);
+            var res = st.act() || {};
+            await delay(st.wait || 1000);
+            if (res.reading) obs.push(res.reading);
+            if (res.done) ui.markDone(el, res.done);
+            await delay(320);
+          }
+        } finally { if (plan.cleanup) plan.cleanup(); }
+      }
       for (var i = 0; i < targets.length; i++) {
         if (ctx.signal.aborted) throw new Error("aborted");
         var tg = targets[i];
@@ -695,12 +711,12 @@
       (api.agentBrief || "A model reconstructs the full temperature field of a coolant loop from sparse sensors.") + " " +
       "You investigate hands-on: drive the console, look from several angles, reveal where the model is unsure, probe the estimated state at several points, reason, and narrate each step in one short line like a colleague showing the operator. " +
       "PLANT TOOLS return exact values: describe_asset, get_overview, list_sensors, view_field (a saliency map of the worst temperature and confidence spots) and probe_point (drop a virtual sensor at a normalized point and read its temperature and confidence). " +
-      "CONSOLE TOOLS drive the view: " + (IN_SHELL ? "switch_view (2D/3D), " : "") + "set_view, zoom, set_layer, control_time (start/incident/end/play). clear_sensors removes placed sensors; act is a SIMULATED control decision. " +
+      "CONSOLE TOOLS drive the view: " + (IN_SHELL ? "switch_view (2D/3D), " : "") + "set_view, zoom, set_layer, control_time (start/incident/end/play). clear_sensors removes placed sensors; act logs a recommended control action for the operator. " +
       (COMPUTER ? "COMPUTER TOOL: you can also operate this console like a human operator. Take a screenshot to see it, click its buttons and pills, drag on the 3D scene to rotate it, scroll on the scene to zoom, move the pointer over a rack, a hose, a pipe or the CDU to read its tooltip, click or drag the timeline, scroll the telemetry list. The screenshot shows the console without your own chat panel, and its pixel coordinates are the ones you act on. Use the computer tool when the user asks you to show, open, click, rotate or operate something, when a control has no console tool, or to check what the operator sees. Send several actions in one call when the next steps are certain. For numbers prefer the plant tools: they are exact and faster. " : "") +
       "INVESTIGATE (when asked to investigate / assess / look around / what is wrong / where is the risk): run a focused multi-step investigation, never one probe, but be efficient and decisive. Orient: get_overview, list_sensors, and control_time to the incident if something is developing. Survey: set_view to the suspect region (overview or fault), turn set_layer confidence on, and view_field once to see where temperature and confidence are worst. Gather evidence: probe_point at 3 to 4 DISTINCT key spots (the hottest, the most-uncertain, and a calm reference); never stack probes, and stop probing once the picture is clear. Conclude promptly: synthesise findings (what, where, how hot, how confident, what the sensors miss) and a clear recommendation; call act once if a control decision is warranted. Aim to finish within about ten steps; do not keep exploring after you can already explain the situation. " +
       "MEMORY: you remember the earlier turns in this conversation. For a follow-up question (what do you recommend, what is happening, why, what should I do), answer directly from what you already found earlier; do NOT re-run a full investigation unless the user explicitly asks you to investigate again or you genuinely lack the evidence. " +
       "SIMPLE requests stay simple: tour / show me / another angle -> move the camera and describe, no probing. place a sensor at X -> probe_point there. clear / reset -> clear_sensors, confirm briefly, and stop. " +
-      "RULES: state a temperature, flow, confidence, or location only if a tool returned it in THIS conversation or it is visible on the console screen. Virtual sensors persist; remove them only when asked. act is simulated; never claim you physically changed anything. The asset and its telemetry are simulated: do not present them as a live plant. End with a substantive wrap-up (the finding, the evidence, the recommendation) in clean prose: no markdown, no bullets or headings, and no em dashes or en dashes.";
+      "RULES: state a temperature, flow, confidence, or location only if a tool returned it in THIS conversation or it is visible on the console screen. Virtual sensors persist; remove them only when asked. act only logs a recommendation: never claim you physically changed anything, and call it a recommendation you logged. Never present the asset as a live plant; if the operator asks where the data comes from, say it plainly. End with a substantive wrap-up (the finding, the evidence, the recommendation) in clean prose: no markdown, no bullets or headings, and no em dashes or en dashes.";
   }
   async function callBackend(body, signal) {
     var res = await fetch(BACKEND, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: signal });
@@ -731,7 +747,7 @@
     if (name === "list_sensors") return (out ? out.length : 0) + " sensors read";
     if (name === "describe_asset") return "mapped " + (out && out.anchors ? out.anchors.length : 0) + " landmarks";
     if (name === "clear_sensors") return "cleared the virtual sensors";
-    if (name === "act") return "(simulated) " + esc(a.type || "action") + " dispatched";
+    if (name === "act") return esc(a.type || "action") + " logged as a recommendation";
     if (name === "switch_view") return "switched to the " + (out && out.view === "3d" ? "3D loop" : "2D field");
     if (name === "set_view") return "framed the " + esc(out && out.view ? out.view : (a.preset || "overview")) + " view";
     if (name === "zoom") return "zoomed " + esc(out && out.zoom ? out.zoom : (a.direction || "in"));

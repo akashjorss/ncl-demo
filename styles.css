@@ -58,6 +58,8 @@ body {
 .lbl.faint { opacity: .55; }
 .lbl.est { z-index: 4; padding: 3px 9px; font-size: 12px; background: rgba(60,42,6,.9); border-color: rgba(251,191,36,.85); color: #fde68a; }
 .lbl.est small { color: #f3d98a; }
+.lbl.probe { z-index: 4; padding: 3px 8px; background: rgba(6,38,56,.92); border-color: rgba(125,211,252,.85); color: #d9f2ff; }
+.lbl.probe small { color: #9fd3ec; }
 
 /* timeline */
 .timeline-wrap { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 12px; width: min(760px, calc(100% - 300px)); padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-glass); backdrop-filter: blur(8px); }
