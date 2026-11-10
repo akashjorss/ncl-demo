@@ -629,6 +629,39 @@
     rack(i) { const rk = RACKS[i]; return toScreen(new THREE.Vector3(rk.x, R.h * 0.5, (rk.zRear + rk.zFront) / 2)); },
     hoseR(i) { const rk = RACKS[i]; return toScreen(new THREE.Vector3(rk.x, (yR + R.h) / 2, rk.sgn * (zR + Math.abs(rk.zFront) - 0.28) / 2)); },
     frame() { return state.frame; },
+    probes() { return probes.map(p => p.key); },
+    // what a pointer at client (x, y) reads: { kind, index } or null (null too where a panel covers the scene)
+    hit(x, y) {
+      if (document.elementFromPoint(x, y) !== renderer.domElement) return null;
+      const rect = renderer.domElement.getBoundingClientRect(), rc = new THREE.Raycaster();
+      rc.params.Line = { threshold: 0.05 };
+      rc.setFromCamera(new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1), camera);
+      const h = rc.intersectObjects(hoverTargets, false)[0]; if (!h) return null;
+      const u = h.object.userData; return { kind: u.kind, index: u.kind === "rack" ? u.index : u.kind === "cdu" ? -1 : u.rack };
+    },
+    // a screen point where the pointer reads the wanted object ("rack", "hoseR", "hoseS" or "cdu"), searched over
+    // the object itself so that a nearer rack or hose in front of it does not take the pointer
+    find(kind, i) {
+      const pts = [], rk = RACKS[i];
+      if (kind === "cdu") {
+        for (const fy of [0.5, 0.35, 0.65]) for (const [dx, dz] of [[0, CDU.d / 2], [0, -CDU.d / 2], [CDU.w / 2, 0], [-CDU.w / 2, 0], [CDU.w * 0.3, CDU.d / 2], [-CDU.w * 0.3, CDU.d / 2]]) pts.push([cduX + dx, CDU.h * fy, dz]);
+      } else if (kind === "rack") {
+        const zc = (rk.zRear + rk.zFront) / 2;
+        for (const fy of [0.5, 0.35, 0.65, 0.2, 0.8]) for (const fx of [0, 0.3, -0.3]) { pts.push([rk.x + fx * R.w, R.h * fy, rk.zFront]); pts.push([rk.x + fx * R.w, R.h * fy, rk.zRear]); }
+        for (const fz of [0, 0.3, -0.3]) for (const fy of [0.5, 0.3, 0.7]) { pts.push([rk.x + R.w / 2, R.h * fy, zc + fz * R.d]); pts.push([rk.x - R.w / 2, R.h * fy, zc + fz * R.d]); }
+        pts.push([rk.x, R.h, zc]);
+      } else {
+        const sup = kind === "hoseS", a = new THREE.Vector3(rk.x, sup ? yS : yR, rk.sgn * (sup ? zS : zR)), b = new THREE.Vector3(rk.x, R.h + 0.02, rk.zFront - rk.sgn * (sup ? 0.12 : 0.28));
+        for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88]) { const q = a.clone().lerp(b, t); pts.push([q.x, q.y, q.z]); }
+      }
+      for (const q of pts) {
+        const sp = toScreen(new THREE.Vector3(q[0], q[1], q[2])); if (!sp.visible) continue;
+        const h = this.hit(sp.x, sp.y);
+        if (h && h.kind === kind && h.index === (kind === "cdu" ? -1 : i)) return { x: sp.x, y: sp.y };
+      }
+      return null;
+    },
+    pin(key) { dropProbe(key); }, unpin(key) { const p = probes.find(o => o.key === key); if (p) removeProbe(p); },
   };
 
   // ---- agent API: the hook "Ask your plant" works through, the same contract as the loop views ----------
