@@ -1,0 +1,98 @@
+/* NCL shared design tokens: the single source of truth for color, type, spacing,
+   radii, elevation, and motion across all three demo surfaces (2D field, 3D loop,
+   combined wrapper). Loaded before each surface's own styles.css so the three
+   surfaces can never drift again: retheme once here. */
+:root {
+  /* ---- color: base + surfaces ---- */
+  --bg: #0a1120;
+  --surface-1: #131f36;                       /* solid card (docked panels)        */
+  --surface-2: #0f1a30;                        /* recessed surface                  */
+  --surface-glass: rgba(17, 28, 48, 0.82);     /* floating HUD over the 3D canvas   */
+  --panel: var(--surface-1);                   /* legacy alias; 3D overrides → glass */
+  --panel-2: var(--surface-2);                 /* legacy alias                      */
+  --line: #233351;
+  --line-soft: #1b2944;
+  --ink: #eaf0fb;
+  --muted: #93a4c0;
+  --muted-2: #8595b3;                          /* raised from #6f81a1 to clear WCAG AA */
+
+  /* ---- brand blue ramp ---- */
+  --blue-700: #1e51c8;
+  --blue-deep: #2563eb;
+  --blue: #3b82f6;
+  --blue-300: #93c5fd;
+
+  /* ---- semantic status ---- */
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #fb6f6f;
+  --critical: #ef4444;
+  --critical-text: #ff9a9a;
+  --ok-tint: rgba(52, 211, 153, 0.15);
+  --watch-tint: rgba(251, 191, 36, 0.14);
+  --warn-tint: rgba(251, 111, 111, 0.12);
+  --critical-tint: rgba(239, 68, 68, 0.18);
+  --focus: #7aa7ff;
+
+  /* ---- elevation ---- */
+  --shadow-1: 0 12px 32px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --shadow: var(--shadow-1);                   /* legacy alias */
+
+  /* ---- radii ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* ---- spacing (8pt grid, 4pt half-steps) ---- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+
+  /* ---- type scale (~1.2 ratio off a 16px base) ---- */
+  --fs-micro: 0.6875rem;   /* 11px */
+  --fs-label: 0.75rem;     /* 12px */
+  --fs-body:  0.875rem;    /* 14px */
+  --fs-lead:  1rem;        /* 16px */
+  --fs-status: 1.375rem;   /* 22px */
+  --fs-data:   1.625rem;   /* 26px */
+  --fs-hero:   2.125rem;   /* 34px */
+  --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700; --fw-heavy: 800;
+  --lh-tight: 1.2; --lh-data: 1.35; --lh-ui: 1.4; --lh-prose: 1.55;
+
+  /* ---- motion ---- */
+  --dur-fast: 120ms; --dur-base: 180ms; --dur-slow: 240ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* engineered, stable numerals everywhere so readings never reflow as the timeline animates */
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* one visible keyboard focus ring for every interactive control (WCAG 2.4.7) */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="tab"]:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* tactile press feedback on every button */
+button:active { transform: scale(0.985); }
+
+/* honor reduced-motion: kill long transitions, looping pulses, and the typing stream (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

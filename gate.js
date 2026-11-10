@@ -52,24 +52,65 @@
     return result;
   }
 
+  // Keep the demo hidden behind a designed splash until access is granted (the splash
+  // overrides the inherited visibility for itself). Brand values are inlined so the gate
+  // is self-contained and renders before tokens.css / Inter load.
   document.documentElement.style.visibility = "hidden";
-  function deny() {
-    document.documentElement.style.visibility = "";
-    document.documentElement.innerHTML =
-      "<body style='margin:0;display:grid;place-items:center;height:100vh;background:#0a1120;color:#93a4c0;" +
-      "font-family:Inter,system-ui,sans-serif'><div style='text-align:center'>" +
-      "<div style='font-size:28px;font-weight:800;color:#eaf0fb;margin-bottom:8px'>NCL</div>" +
-      "Private demo. Reload the page to try again.</div></body>";
+  function reveal() { document.documentElement.style.visibility = ""; }
+
+  function buildGate() {
+    var wrap = document.createElement("div");
+    wrap.id = "nclGate";
+    wrap.setAttribute("role", "dialog");
+    wrap.setAttribute("aria-modal", "true");
+    wrap.setAttribute("aria-label", "Private demo access");
+    wrap.innerHTML =
+      "<style>" +
+      "#nclGate{visibility:visible;position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;" +
+      "background:radial-gradient(900px 600px at 50% -12%,rgba(37,99,235,0.16),transparent 60%),#0a1120;" +
+      "font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;}" +
+      "#nclGate *{box-sizing:border-box;}" +
+      "#nclGate .gate-card{width:360px;max-width:calc(100vw - 40px);padding:32px;border:1px solid #233351;" +
+      "border-radius:16px;background:#131f36;box-shadow:0 24px 60px rgba(0,0,0,0.55);text-align:center;}" +
+      "#nclGate .gate-mark{width:56px;height:56px;margin:0 auto 16px;border-radius:14px;display:grid;place-items:center;" +
+      "background:#2563eb;color:#fff;font-weight:800;font-size:19px;letter-spacing:.04em;box-shadow:0 10px 30px rgba(37,99,235,0.45);}" +
+      "#nclGate h1{margin:0 0 4px;font-size:18px;font-weight:700;color:#eaf0fb;}" +
+      "#nclGate .gate-sub{margin:0 0 20px;font-size:13px;color:#93a4c0;line-height:1.5;}" +
+      "#nclGate input{width:100%;padding:11px 13px;border-radius:10px;border:1px solid #233351;background:#0f1a30;" +
+      "color:#eaf0fb;font-size:14px;outline:none;}" +
+      "#nclGate input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.28);}" +
+      "#nclGate button{width:100%;margin-top:10px;padding:11px 14px;border:0;border-radius:10px;background:#2563eb;" +
+      "color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:filter .15s;}" +
+      "#nclGate button:hover{filter:brightness(1.08);}" +
+      "#nclGate .gate-err{margin-top:10px;font-size:12.5px;color:#fb6f6f;min-height:15px;opacity:0;transition:opacity .15s;}" +
+      "#nclGate .gate-err.show{opacity:1;}" +
+      "</style>" +
+      "<form class='gate-card' autocomplete='off'>" +
+      "<div class='gate-mark'>NCL</div>" +
+      "<h1>Physical Observability</h1>" +
+      "<p class='gate-sub'>Private demo. Enter the access password to continue.</p>" +
+      "<input id='nclGateInput' type='password' placeholder='Access password' aria-label='Access password' autocomplete='current-password'>" +
+      "<button type='submit'>Enter</button>" +
+      "<div class='gate-err' id='nclGateErr' role='alert'>Incorrect password. Try again.</div>" +
+      "</form>";
+    (document.body || document.documentElement).appendChild(wrap);
+    var input = wrap.querySelector("#nclGateInput");
+    var err = wrap.querySelector("#nclGateErr");
+    wrap.querySelector("form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (sha256(input.value) === HASH) {
+        sessionStorage.setItem("nclAccess", "granted");
+        wrap.remove();
+        reveal();
+      } else {
+        err.classList.add("show");
+        input.value = "";
+        input.focus();
+      }
+    });
+    input.focus();
   }
-  function ask(msg) {
-    var p = window.prompt(msg);
-    if (p === null) { deny(); return; }
-    if (sha256(p) === HASH) {
-      sessionStorage.setItem("nclAccess", "granted");
-      document.documentElement.style.visibility = "";
-    } else {
-      ask("Incorrect password. Enter the access password:");
-    }
-  }
-  ask("This demo is private.\nEnter the access password:");
+
+  if (document.body) buildGate();
+  else document.addEventListener("DOMContentLoaded", buildGate);
 })();

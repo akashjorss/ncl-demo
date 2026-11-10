@@ -3,12 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NCL · Physical Observability</title>
+  <title>NCL · Physical Observability · Row A</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='13' font-weight='700' fill='white' text-anchor='middle'%3ENCL%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <script>if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && location.protocol !== "file:") document.write('<scr' + 'ipt src="gate.js"></scr' + 'ipt>');</script>
-  <script>document.write('<link rel="stylesheet" href="styles.css?cb=' + Date.now() + '">');</script>
+  <script>if (location.search.indexOf("embed") > -1) document.documentElement.classList.add("embed");</script>
+  <script>document.write('<link rel="stylesheet" href="tokens.css?cb=' + Date.now() + '"><link rel="stylesheet" href="styles.css?cb=' + Date.now() + '">');</script>
 </head>
 <body>
-  <header class="cb-topbar">
+  <header class="topbar">
     <div class="brand-group">
       <span class="logo">NCL</span>
       <div class="brand-text">
@@ -16,65 +21,126 @@
         <span>Neural Continuity Labs</span>
       </div>
     </div>
-
-    <div class="view-seg" role="tablist" aria-label="View">
-      <button class="view-btn is-active" data-view="2d" type="button" role="tab">2D field</button>
-      <button class="view-btn" data-view="3d" type="button" role="tab">3D loop</button>
-    </div>
-
     <div class="asset-strip">
       <span class="live-dot" id="liveDot"></span>
-      <span>Coolant Loop C-17</span>
+      <span id="assetName">Row A · CDU-A1</span>
+      <span class="sim-badge" title="Geometry from the OCP Project Deschutes specification. The incident and its telemetry are simulated, not a live plant.">Simulated</span>
     </div>
   </header>
 
-  <main class="cb-stage" id="cbStage">
-    <div class="view-frame is-active" data-frame="2d">
-      <iframe id="frame2d" title="NCL 2D field demo" allow="fullscreen"></iframe>
+  <main class="stage" id="stage">
+    <div class="hud hud-controls">
+      <div class="seg" role="tablist" aria-label="Reconstruction mode">
+        <button class="seg-btn" data-view="before" type="button">Before NCL</button>
+        <button class="seg-btn is-active" data-view="after" type="button">After NCL</button>
+      </div>
+      <div class="toggles">
+        <button class="pill is-active" data-layer="structure" type="button">Structure</button>
+        <button class="pill is-active" data-layer="rdhx" type="button">Rear doors</button>
+        <button class="pill is-active" data-layer="labels" type="button">Labels</button>
+        <button class="pill" data-layer="confidence" type="button">Confidence</button>
+      </div>
+      <div class="toggles">
+        <button class="pill" id="viewCdu" type="button">Look at CDU</button>
+        <button class="pill" id="viewFault" type="button">Look at fault</button>
+        <button class="pill" id="resetView" type="button">Reset view</button>
+      </div>
+      <div class="colorbar">
+        <span id="cbMin">32°C</span>
+        <div class="cb-track" id="cbTrack"></div>
+        <span id="cbMax">88°C</span>
+      </div>
+      <p class="hud-hint" id="hudHint">Drag to rotate · scroll to zoom · hover a rack or a hose to read it</p>
     </div>
-    <div class="view-frame" data-frame="3d">
-      <iframe id="frame3d" title="NCL 3D loop demo" allow="fullscreen"></iframe>
+
+    <div class="explainer-wrap"><p class="explainer" id="explainer"></p></div>
+    <div class="probe-tip" id="probeTip" hidden></div>
+
+    <div class="timeline-wrap">
+      <button class="play-btn" id="playBtn" type="button" aria-label="Play">▶</button>
+      <span class="clock" id="clock">09:00</span>
+      <div class="track-wrap">
+        <input id="timeline" type="range" min="0" max="39" step="1" value="0" aria-label="Timeline">
+        <div class="ticks" id="ticks"></div>
+      </div>
     </div>
   </main>
 
-  <footer class="cb-foot">
-    Demo driven by a physics simulation (advection-diffusion); the reconstruction stands in for the NCL model output. Same asset, two views: a 2D field slice and the full 3D coolant loop.
+  <aside class="ops">
+    <p class="explainer explainer-narrow" id="explainerNarrow"></p>
+    <div class="status-card" id="statusCard">
+      <span class="eyebrow">Asset status</span>
+      <div class="status-row">
+        <h2 id="statusWord">Normal</h2>
+        <span class="status-pill" id="statusPill">All nominal</span>
+      </div>
+      <p id="statusLine">CDU telemetry and the reconstructed loop agree. Operating within bounds.</p>
+      <p class="lead-line" id="leadLine" hidden></p>
+    </div>
+
+    <div class="gap-card" id="gapCard">
+      <span class="eyebrow">What the sensors miss</span>
+      <div class="gap-hero">
+        <strong id="gapHidden">0%</strong>
+        <span id="gapHiddenCap">flow deficit on the worst branch, not measured</span>
+      </div>
+      <div class="gap-row">
+        <div class="gap-val">
+          <small>CDU flow meter sees</small>
+          <strong id="gapCdu">0.0%</strong>
+        </div>
+        <div class="gap-arrow" aria-hidden="true">&rarr;</div>
+        <div class="gap-val accent">
+          <small>NCL branch estimate</small>
+          <strong id="gapBranch">118 L/min</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-grid">
+      <div class="metric wide">
+        <small>Fault location</small>
+        <strong id="mLocation">None</strong>
+      </div>
+      <div class="metric">
+        <small>Confidence here</small>
+        <strong id="mConfidence">High</strong>
+      </div>
+      <div class="metric">
+        <small>Nearest sensor</small>
+        <strong id="mDistance">in range</strong>
+      </div>
+    </div>
+
+    <div class="action-card" id="actionCard">
+      <span class="eyebrow">Recommended action</span>
+      <p id="actionText">Continue normal monitoring. No intervention required.</p>
+    </div>
+
+    <div class="telemetry-card">
+      <span class="eyebrow">CDU-A1 telemetry <small class="eyebrow-note">Redfish CoolingUnit names</small></span>
+      <div class="tele-list" id="teleList"></div>
+    </div>
+  </aside>
+
+  <footer class="footnote" id="footnote">
+    Geometry and sensor set from the Open Compute Project "Project Deschutes" specification (Google, 2026): a 2 MW CDU and two hot-aisle bays of 28-inch racks. The incident and its telemetry are simulated.
   </footer>
 
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/OrbitControls.js"></script>
   <script>
-    (function () {
-      var cb = Date.now();
-      var f2d = document.getElementById("frame2d");
-      var f3d = document.getElementById("frame3d");
-      // Preload both demos in embed mode (their own top bars are hidden by ?embed=1).
-      f2d.src = "ncl_demo/index.html?embed=1&cb=" + cb;
-      f3d.src = "ncl_demo_3d/index.html?embed=1&cb=" + cb;
-
-      var frames = { "2d": f2d, "3d": f3d };
-      var btns = Array.prototype.slice.call(document.querySelectorAll(".view-btn"));
-      var panes = Array.prototype.slice.call(document.querySelectorAll(".view-frame"));
-
-      function show(view) {
-        btns.forEach(function (b) { b.classList.toggle("is-active", b.dataset.view === view); });
-        panes.forEach(function (p) { p.classList.toggle("is-active", p.dataset.frame === view); });
-        // Nudge the now-visible demo to re-measure its container (3D re-fits the camera).
-        var win = frames[view] && frames[view].contentWindow;
-        if (win) {
-          try { win.dispatchEvent(new Event("resize")); } catch (e) {}
-          setTimeout(function () { try { win.dispatchEvent(new Event("resize")); } catch (e) {} }, 60);
-        }
-      }
-
-      btns.forEach(function (b) {
-        b.addEventListener("click", function () { show(b.dataset.view); });
-      });
-
-      // Keyboard: 2 / 3 to switch views quickly during a pitch.
-      window.addEventListener("keydown", function (e) {
-        if (e.key === "2") show("2d");
-        else if (e.key === "3") show("3d");
-      });
-    })();
+    var _cb = Date.now();
+    document.write('<scr' + 'ipt src="row_data.js?cb=' + _cb + '"></scr' + 'ipt>');
+    document.write('<scr' + 'ipt src="row.js?cb=' + _cb + '"></scr' + 'ipt>');
+  </script>
+  <!-- Ask your plant: shared with the combined shell. Standalone the page loads it itself; embedded, the shell provides it. -->
+  <script>
+    if (location.search.indexOf("embed") < 0) {
+      var _acb = Date.now();
+      document.write('<scr' + 'ipt src="config.js?cb=' + _acb + '"></scr' + 'ipt>');
+      document.write('<scr' + 'ipt src="agent.js?cb=' + _acb + '"></scr' + 'ipt>');
+    }
   </script>
 </body>
 </html>
